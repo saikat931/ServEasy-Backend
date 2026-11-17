@@ -1,0 +1,13 @@
+# Environment files (contains sensitive database & SMTP credentials)
+.env
+.env.hostinger
+host.env
+
+# Logs
+logs/*.log
+*.log
+*.tmp
+
+# OS generated files
+.DS_Store
+Thumbs.db
