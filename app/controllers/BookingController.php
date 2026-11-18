@@ -47,7 +47,7 @@ class BookingController {
             }
 
             Response::success($bookings, "Bookings list retrieved");
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Response::error($e->getMessage());
         }
     }
@@ -76,7 +76,7 @@ class BookingController {
             }
 
             Response::success($booking, "Booking details retrieved");
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Response::error($e->getMessage());
         }
     }
@@ -97,7 +97,7 @@ class BookingController {
             $request['longitude'] = $lng;
             $booking = $this->bookingService->createBooking($request);
             Response::success($booking, "Booking requested successfully", 201);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Response::error($e->getMessage());
         }
     }
@@ -230,7 +230,7 @@ class BookingController {
                     'booking' => $updatedBooking
                 ], "Booking details updated successfully.");
             }
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Response::error($e->getMessage());
         }
     }
@@ -344,7 +344,7 @@ class BookingController {
                 'booking' => $updatedBooking,
                 'service_charge_due' => $serviceChargeAmount
             ], "Booking marked as PAID! ₹{$serviceChargeAmount} site service charge recorded.");
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
@@ -435,7 +435,7 @@ class BookingController {
                 'remaining_due' => 0.00,
                 'payment_method' => strtoupper($method)
             ], "Site service charge of ₹" . number_format($totalDue, 2) . " cleared! You can now accept new bookings.");
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
@@ -485,7 +485,7 @@ class BookingController {
                 'can_accept_bookings' => ($totalDue <= 0),
                 'charges' => $charges
             ], "Service charges retrieved successfully.");
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Response::error($e->getMessage());
         }
     }
@@ -503,7 +503,7 @@ class BookingController {
             $data['provider_id'] = $providerId;
             $data['date'] = $date;
             Response::success($data, "Provider slot availability retrieved successfully.");
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Response::error($e->getMessage());
         }
     }
