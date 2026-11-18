@@ -326,6 +326,62 @@ if ($action == "verify_otp") {
     exit;
 }
 
+/* ================= VERIFY JWT TOKEN (FOR SPLIT-DOMAIN PORTAL SESSION SYNC) ================= */
+if ($action == "verify_token") {
+    $token = trim($_POST['access_token'] ?? ($_GET['access_token'] ?? ''));
+    if (empty($token)) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+        if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $m)) {
+            $token = trim($m[1]);
+        }
+    }
+
+    if (empty($token)) {
+        ob_clean();
+        echo json_encode(["status" => "error", "message" => "Access token is required"]);
+        exit;
+    }
+
+    try {
+        $appConfig = require dirname(__DIR__) . '/config/app.php';
+        $payload = \App\Helpers\JWT::decode($token, $appConfig['jwt']['secret']);
+        $providerId = (int)($payload['user_id'] ?? 0);
+
+        if ($providerId <= 0 || strtoupper($payload['role'] ?? '') !== 'PROVIDER') {
+            ob_clean();
+            echo json_encode(["status" => "error", "message" => "Invalid provider token"]);
+            exit;
+        }
+
+        $q = mysqli_query($conn, "SELECT id, full_name, email, phone FROM `serveasy-providers` WHERE id = $providerId LIMIT 1");
+        if (!$q || mysqli_num_rows($q) === 0) {
+            ob_clean();
+            echo json_encode(["status" => "error", "message" => "Provider account not found"]);
+            exit;
+        }
+
+        $provider = mysqli_fetch_assoc($q);
+        $rawName = trim($provider['full_name'] ?? '');
+
+        ob_clean();
+        echo json_encode([
+            "status" => "success",
+            "dealer" => [
+                "id"          => (int)$provider['id'],
+                "provider_id" => (int)$provider['id'],
+                "name"        => $rawName ?: 'Service Provider',
+                "email"       => $provider['email'] ?? '',
+                "phone"       => $provider['phone'] ?? '',
+                "role"        => "provider"
+            ]
+        ]);
+    } catch (\Throwable $e) {
+        ob_clean();
+        echo json_encode(["status" => "error", "message" => "Token verification failed: " . $e->getMessage()]);
+    }
+    exit;
+}
+
 /* ================= HELPER: CALCULATE PROFILE PROGRESS (4 PILLARS) ================= */
 function calculateProviderProgress($conn, $providerId) {
     $pId = (int)$providerId;
