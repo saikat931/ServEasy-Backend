@@ -37,11 +37,11 @@ spl_autoload_register(function ($class) {
 $envPath = file_exists(dirname(__DIR__) . '/host.env') ? dirname(__DIR__) . '/host.env' : dirname(__DIR__) . '/.env';
 \App\Helpers\Env::load($envPath);
 
-// 3. Set JSON response header and CORS headers for API requests
-if (str_contains($_SERVER['REQUEST_URI'] ?? '', '/api/') || str_contains($_SERVER['REQUEST_URI'] ?? '', '/backend/api/')) {
+// 3. Set JSON response header and dynamic CORS headers for API requests
+if (PHP_SAPI !== 'cli' && (str_contains($_SERVER['REQUEST_URI'] ?? '', '/api/') || str_contains($_SERVER['REQUEST_URI'] ?? '', '/backend/api/') || str_contains($_SERVER['SCRIPT_FILENAME'] ?? '', '/api/'))) {
     header('Content-Type: application/json');
 
-    // CORS support for mobile apps, emulators and web clients (Multi-Probability Compliant)
+    // Dynamic CORS: echo exact Origin so browsers allow credentials:'include' across Hostinger domains
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     if (!empty($origin) && $origin !== '*') {
         header("Access-Control-Allow-Origin: $origin");
@@ -53,8 +53,9 @@ if (str_contains($_SERVER['REQUEST_URI'] ?? '', '/api/') || str_contains($_SERVE
         header("Access-Control-Allow-Credentials: true");
     }
     header("Vary: Origin");
-    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Provider-Id, X-Customer-Id, Accept, Origin");
+    header("Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Auth-Token, X-Requested-With, X-Provider-Id, X-Customer-Id, Accept, Origin, Cache-Control");
+    header("Access-Control-Max-Age: 86400");
 
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
         http_response_code(200);

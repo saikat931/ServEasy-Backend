@@ -68,10 +68,15 @@ class Auth {
         if (!$authHeader && isset($_SERVER['HTTP_AUTHORIZATION'])) {
             $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
         }
+        if (!$authHeader && isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+            $authHeader = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+        }
 
         $token = null;
         if ($authHeader && preg_match('/Bearer\s+(\S+)/i', $authHeader, $matches)) {
             $token = $matches[1];
+        } elseif (!empty($_SERVER['HTTP_X_AUTH_TOKEN'])) {
+            $token = trim($_SERVER['HTTP_X_AUTH_TOKEN']);
         } elseif (!empty($_COOKIE['access_token'])) {
             $token = $_COOKIE['access_token'];
         }
