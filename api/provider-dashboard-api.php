@@ -1681,6 +1681,23 @@ try {
         }
     } catch (\Throwable $t) {}
 
+    $categories = [];
+    try {
+        $categories = $pdo->query("SELECT id, name as category_name FROM `serveasy-subcategories` ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (\Throwable $t) {}
+
+    $provider_branches = [];
+    try {
+        $c_chk = $pdo->prepare("SELECT id, company_name FROM `serveasy-company` WHERE provider_id = ? LIMIT 1");
+        $c_chk->execute([$dealer_id]);
+        $comp_row = $c_chk->fetch(PDO::FETCH_ASSOC);
+        if ($comp_row && !empty(trim($comp_row['company_name'] ?? ''))) {
+            $b_chk = $pdo->prepare("SELECT id, branch_name FROM `serveasy-provider-branches` WHERE provider_id = ? ORDER BY id ASC");
+            $b_chk->execute([$dealer_id]);
+            $provider_branches = $b_chk->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        }
+    } catch (\Throwable $t) {}
+
     // Default / init_dashboard response for standalone Provider frontend
     echo json_encode([
         'status'              => 'success',
@@ -1700,6 +1717,8 @@ try {
         'platformFeePercent'  => $platformFeePercent,
         'platformFeeType'     => $platformFeeType,
         'platformFeeAmount'   => $platformFeeAmount,
+        'categories'          => $categories,
+        'provider_branches'   => $provider_branches,
     ]);
     exit();
 
