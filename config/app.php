@@ -11,7 +11,7 @@ return [
     'jwt' => [
         'secret' => $_ENV['JWT_SECRET'] ?? 'servicenest_super_secret_jwt_key_1234567890',
         'refresh_secret' => $_ENV['JWT_REFRESH_SECRET'] ?? 'servicenest_super_secret_refresh_key_0987654321',
-        'access_ttl' => 3600,       // 1 hour
+        'access_ttl' => 604800,     // 7 days (matches web/provider portal sessions)
         'refresh_ttl' => 2592000,   // 30 days
     ],
     

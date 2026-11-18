@@ -346,7 +346,7 @@ if ($action == "verify_otp") {
             if (!empty($accessToken)) {
                 $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
                 setcookie("access_token", $accessToken, [
-                    'expires' => time() + 3600,
+                    'expires' => time() + 604800,
                     'path' => '/',
                     'domain' => '',
                     'secure' => $isSecure,

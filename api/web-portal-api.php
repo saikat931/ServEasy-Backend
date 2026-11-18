@@ -40,6 +40,12 @@ function resolveCustomerId(array $req): int
     if (!empty($_SESSION['user_id'])) {
         return (int)$_SESSION['user_id'];
     }
+    if (!empty($_SERVER['HTTP_X_CUSTOMER_ID'])) {
+        return (int)$_SERVER['HTTP_X_CUSTOMER_ID'];
+    }
+    if (!empty($req['customer_id']) && is_numeric($req['customer_id'])) {
+        return (int)$req['customer_id'];
+    }
     return 0;
 }
 
