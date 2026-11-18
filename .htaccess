@@ -19,12 +19,15 @@ DirectoryIndex index.php
 <IfModule mod_headers.c>
     Header set Access-Control-Allow-Origin "*"
     Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Customer-Id, X-Provider-Id, Accept, Origin"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Auth-Token, X-Requested-With, X-Customer-Id, X-Provider-Id, Accept, Origin"
 </IfModule>
 
 # URL Rewriting for flexible API routing
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Ensure Authorization header is forwarded to PHP on LiteSpeed/Apache CGI
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
     # Respond 200 OK to OPTIONS preflight requests
     RewriteCond %{REQUEST_METHOD} OPTIONS
