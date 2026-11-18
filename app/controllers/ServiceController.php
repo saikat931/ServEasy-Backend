@@ -39,6 +39,15 @@ class ServiceController {
         }
     }
 
+    public function getCategoriesOverview(): void {
+        try {
+            $overview = $this->serviceRepo->getCategoriesOverview();
+            Response::success($overview, "Categories overview retrieved");
+        } catch (Exception $e) {
+            Response::error($e->getMessage());
+        }
+    }
+
     public function show(array $request): void {
         if (empty($request['id'])) {
             Response::error("Service ID is required", 422);

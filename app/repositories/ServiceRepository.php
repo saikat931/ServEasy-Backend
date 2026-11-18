@@ -18,6 +18,50 @@ class ServiceRepository {
         return $stmt->fetchAll();
     }
 
+    public function getCategoriesOverview(): array {
+        $db = DB::getConnection();
+
+        $categories = $db->query("SELECT * FROM `serveasy-categories` WHERE is_active = 1 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+        $subcategories = $db->query("
+            SELECT 
+                sub.id AS subcategory_id,
+                sub.category_id,
+                sub.name AS subcategory_name,
+                sub.slug AS subcategory_slug,
+                sub.icon_class,
+                cat.name AS category_name,
+                cat.slug AS category_slug,
+                s.id AS service_id,
+                s.name AS service_name,
+                s.slug AS service_slug,
+                s.base_price AS service_price
+            FROM `serveasy-subcategories` sub
+            JOIN `serveasy-categories` cat ON sub.category_id = cat.id
+            LEFT JOIN `serveasy-services` s 
+                ON s.subcategory_id = sub.id AND s.is_active = 1
+            WHERE sub.is_active = 1
+            ORDER BY sub.category_id ASC, sub.id ASC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        $statsRows = $db->query("
+            SELECT 
+                sub.category_id,
+                COUNT(DISTINCT s.id) AS service_count,
+                MIN(s.base_price) AS min_price
+            FROM `serveasy-services` s
+            JOIN `serveasy-subcategories` sub ON s.subcategory_id = sub.id
+            WHERE s.is_active = 1
+            GROUP BY sub.category_id
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        return [
+            'categories'    => $categories,
+            'subcategories' => $subcategories,
+            'stats'         => $statsRows,
+        ];
+    }
+
     public function findServiceById(int $id): ?array {
         $db = DB::getConnection();
         $stmt = $db->prepare("
