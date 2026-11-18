@@ -240,12 +240,14 @@ if ($action == "send_otp") {
 /* ================= VERIFY OTP ================= */
 if ($action == "verify_otp") {
 
-    $identity = $_POST['identity'] ?? '';
-    $otp = $_POST['otp'] ?? '';
+    $identity = trim($_POST['identity'] ?? '');
+    $otp = trim($_POST['otp'] ?? '');
+    $safeIdentity = mysqli_real_escape_string($conn, $identity);
+    $safeOtp = mysqli_real_escape_string($conn, $otp);
 
     if (isEmail($identity)) {
         $column = "email_address";
-        $where_clause = "su.email_address = '$identity'";
+        $where_clause = "su.email_address = '$safeIdentity'";
     } else {
         $column = "phone_number";
         $clean_phone = substr(preg_replace('/[^0-9]/', '', $identity), -10);
@@ -255,7 +257,7 @@ if ($action == "verify_otp") {
     $query = mysqli_query($conn, "
         SELECT su.* FROM site_user su
         WHERE $where_clause
-        AND su.otp='$otp'
+        AND su.otp='$safeOtp'
         AND su.otp_created_at >= (NOW() - INTERVAL 3 MINUTE)
     ");
 
@@ -376,6 +378,56 @@ if ($action == "verify_otp") {
         echo json_encode(["status" => "error", "message" => "Invalid or expired OTP"]);
     }
 
+    exit;
+}
+
+/* ================= VERIFY JWT TOKEN (FOR SPLIT-DOMAIN WEB SESSION SYNC) ================= */
+if ($action == "verify_token") {
+    $token = trim($_POST['access_token'] ?? ($_GET['access_token'] ?? ''));
+    if (empty($token)) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+        if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $m)) {
+            $token = trim($m[1]);
+        }
+    }
+
+    if (empty($token)) {
+        echo json_encode(["status" => "error", "message" => "Access token is required"]);
+        exit;
+    }
+
+    try {
+        $appConfig = require dirname(__DIR__) . '/config/app.php';
+        $payload = \App\Helpers\JWT::decode($token, $appConfig['jwt']['secret']);
+        $userId = (int)($payload['user_id'] ?? 0);
+
+        if ($userId <= 0) {
+            echo json_encode(["status" => "error", "message" => "Invalid customer token"]);
+            exit;
+        }
+
+        $q = mysqli_query($conn, "SELECT id, full_name, email_address, phone_number FROM site_user WHERE id = $userId LIMIT 1");
+        if (!$q || mysqli_num_rows($q) === 0) {
+            echo json_encode(["status" => "error", "message" => "Customer account not found"]);
+            exit;
+        }
+
+        $user = mysqli_fetch_assoc($q);
+        $phone = (!empty($user['phone_number']) && strpos($user['phone_number'], '@') === false) ? $user['phone_number'] : '';
+
+        echo json_encode([
+            "status" => "success",
+            "user" => [
+                "id"        => (int)$user['id'],
+                "full_name" => $user['full_name'] ?? '',
+                "email"     => $user['email_address'] ?? '',
+                "phone"     => $phone,
+                "role"      => "CUSTOMER"
+            ]
+        ]);
+    } catch (\Throwable $e) {
+        echo json_encode(["status" => "error", "message" => "Token verification failed: " . $e->getMessage()]);
+    }
     exit;
 }
 
