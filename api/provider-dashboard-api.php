@@ -292,7 +292,7 @@ try {
         if ($action === 'fetch_orders') {
             $provider_id = (int)$dealer_id;
 
-            // Join customer info â€” prefer site_user name, fall back to users table
+            // Join customer info — prefer site_user name, fall back to users table
             $stmt = $pdo->prepare("
                 SELECT b.id, b.booking_number,
                        b.schedule_date as order_date, b.schedule_time,
@@ -742,7 +742,7 @@ try {
                     'tx_id' => 'COD-CASH-' . strtoupper(uniqid())
                 ]);
 
-                // 3. Record â‚¹20 site service charge for provider
+                // 3. Record ₹20 site service charge for provider
                 $serviceChargeAmount = 20.00;
                 $stmtCharge = $pdo->prepare("
                     INSERT INTO `provider_service_charges` 
@@ -794,7 +794,7 @@ try {
                 header('Content-Type: application/json');
                 echo json_encode([
                     'status' => 'success',
-                    'message' => "Payment marked as PAID! â‚¹{$serviceChargeAmount} site service charge has been recorded to your account.",
+                    'message' => "Payment marked as PAID! ₹{$serviceChargeAmount} site service charge has been recorded to your account.",
                     'service_charge_due' => $serviceChargeAmount
                 ]);
             } catch (Exception $e) {
@@ -836,7 +836,7 @@ try {
                     if ($availBal < $totalDue) {
                         $pdo->rollBack();
                         header('Content-Type: application/json');
-                        echo json_encode(['status' => 'error', 'message' => "Insufficient wallet balance (â‚¹" . number_format($availBal, 2) . ") to clear â‚¹" . number_format($totalDue, 2) . " dues. Please choose Online Payment."]);
+                        echo json_encode(['status' => 'error', 'message' => "Insufficient wallet balance (₹" . number_format($availBal, 2) . ") to clear ₹" . number_format($totalDue, 2) . " dues. Please choose Online Payment."]);
                         exit();
                     }
 
@@ -875,7 +875,7 @@ try {
                 header('Content-Type: application/json');
                 echo json_encode([
                     'status' => 'success',
-                    'message' => "Site service charge of â‚¹" . number_format($totalDue, 2) . " cleared successfully! You can now accept new bookings.",
+                    'message' => "Site service charge of ₹" . number_format($totalDue, 2) . " cleared successfully! You can now accept new bookings.",
                     'cleared_amount' => $totalDue
                 ]);
             } catch (Exception $e) {
@@ -1577,7 +1577,7 @@ try {
 
             if ($amount < 100) {
                 header('Content-Type: application/json');
-                echo json_encode(['status' => 'error', 'message' => 'Minimum withdrawal amount is â‚¹100.00.']);
+                echo json_encode(['status' => 'error', 'message' => 'Minimum withdrawal amount is ₹100.00.']);
                 exit();
             }
 
@@ -1597,7 +1597,7 @@ try {
 
             if ($currBal < $amount) {
                 header('Content-Type: application/json');
-                echo json_encode(['status' => 'error', 'message' => 'Insufficient available balance. You have â‚¹' . number_format($currBal, 2) . ' available.']);
+                echo json_encode(['status' => 'error', 'message' => 'Insufficient available balance. You have ₹' . number_format($currBal, 2) . ' available.']);
                 exit();
             }
 
@@ -1632,7 +1632,7 @@ try {
                 header('Content-Type: application/json');
                 echo json_encode([
                     'status' => 'success',
-                    'message' => 'Payout request of â‚¹' . number_format($amount, 2) . ' submitted successfully! Ref: ' . $payoutRef,
+                    'message' => 'Payout request of ₹' . number_format($amount, 2) . ' submitted successfully! Ref: ' . $payoutRef,
                     'payout_ref' => $payoutRef,
                     'new_available' => $currBal - $amount
                 ]);
