@@ -573,7 +573,7 @@ if ($action == "get_profile") {
     $orderCountQ = mysqli_query($conn, "SELECT COUNT(*) FROM vehicle_wash WHERE provider_id = $providerId");
     $totalBookingsCount = (int)($orderCountQ ? mysqli_fetch_row($orderCountQ)[0] : 0);
 
-    $salesQ = mysqli_query($conn, "SELECT SUM(total_amount) FROM vehicle_wash WHERE provider_id = $providerId AND LOWER(status) = 'completed'");
+    $salesQ = mysqli_query($conn, "SELECT SUM(COALESCE(pkg.price, s.base_price, vw.total_amount)) FROM vehicle_wash vw LEFT JOIN `serveasy-services` s ON vw.service_id = s.id LEFT JOIN `serveasy-service_packages` pkg ON vw.package_id = pkg.id WHERE vw.provider_id = $providerId AND LOWER(vw.status) = 'completed'");
     $totalSalesAmount = (float)($salesQ ? (mysqli_fetch_row($salesQ)[0] ?: 0) : 0);
 
     echo json_encode([
@@ -622,7 +622,7 @@ if ($action == "get_stats" || $action == "fetch_stats") {
     $orderCountQ = mysqli_query($conn, "SELECT COUNT(*) FROM vehicle_wash WHERE provider_id = $providerId");
     $totalBookingsCount = (int)($orderCountQ ? mysqli_fetch_row($orderCountQ)[0] : 0);
 
-    $salesQ = mysqli_query($conn, "SELECT SUM(total_amount) FROM vehicle_wash WHERE provider_id = $providerId AND LOWER(status) = 'completed'");
+    $salesQ = mysqli_query($conn, "SELECT SUM(COALESCE(pkg.price, s.base_price, vw.total_amount)) FROM vehicle_wash vw LEFT JOIN `serveasy-services` s ON vw.service_id = s.id LEFT JOIN `serveasy-service_packages` pkg ON vw.package_id = pkg.id WHERE vw.provider_id = $providerId AND LOWER(vw.status) = 'completed'");
     $totalSalesAmount = (float)($salesQ ? (mysqli_fetch_row($salesQ)[0] ?: 0) : 0);
 
     echo json_encode([

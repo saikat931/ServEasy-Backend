@@ -196,6 +196,35 @@ try {
         ];
     }
 
+    // Helper to calculate Service Provider's pure service amount (excludes platform convenience fee)
+    function calculateProviderAmount(array $row): float {
+        $base = 0.0;
+        if (!empty($row['package_price']) && (float)$row['package_price'] > 0) {
+            $base = (float)$row['package_price'];
+        } elseif (!empty($row['service_price']) && (float)$row['service_price'] > 0) {
+            $base = (float)$row['service_price'];
+        } elseif (!empty($row['base_price']) && (float)$row['base_price'] > 0) {
+            $base = (float)$row['base_price'];
+        }
+
+        $extrasTotal = 0.0;
+        if (!empty($row['extras'])) {
+            $ex = is_string($row['extras']) ? json_decode($row['extras'], true) : $row['extras'];
+            if (is_array($ex)) {
+                foreach ($ex as $item) {
+                    $extrasTotal += (float)($item['price'] ?? 0);
+                }
+            }
+        }
+
+        $provAmt = $base + $extrasTotal;
+        if ($provAmt > 0) {
+            return round($provAmt, 2);
+        }
+
+        return round((float)($row['total_amount'] ?? $row['order_total'] ?? 0), 2);
+    }
+
     $profile_progress = getProviderProfileProgress($pdo, $dealer_id);
     $ver_record = $profile_progress['ver_record'];
     $prov_record = $profile_progress['prov_record'];
@@ -234,19 +263,32 @@ try {
             $total_bookings->execute([$provider_id]);
             $order_count = (int)$total_bookings->fetchColumn();
 
-            // Total Sales
-            $total_sales = $pdo->prepare("SELECT SUM(total_amount) FROM vehicle_wash WHERE provider_id = ? AND LOWER(status) = 'completed'");
-            $total_sales->execute([$provider_id]);
-            $sales_amount = (float)($total_sales->fetchColumn() ?: 0);
+            // Total Sales (Provider's earned service amounts, excluding platform charges)
+            $comp_stmt = $pdo->prepare("
+                SELECT b.total_amount, b.extras, s.base_price as service_price, pkg.price as package_price
+                FROM vehicle_wash b
+                LEFT JOIN `serveasy-services` s ON b.service_id = s.id
+                LEFT JOIN `serveasy-service_packages` pkg ON b.package_id = pkg.id
+                WHERE b.provider_id = ? AND LOWER(b.status) = 'completed'
+            ");
+            $comp_stmt->execute([$provider_id]);
+            $compRows = $comp_stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $sales_amount = 0.0;
+            foreach ($compRows as $cr) {
+                $sales_amount += calculateProviderAmount($cr);
+            }
 
             // Recent live bookings for overview table (active / actionable bookings only; completed & cancelled/rejected orders live in My Bookings)
             $recent_stmt = $pdo->prepare("
                 SELECT b.id, b.booking_number, b.schedule_date, b.schedule_time,
                        b.total_amount, b.status, b.started_at, b.completed_at, b.created_at,
-                       s.name as service_name,
+                       b.payment_method, b.payment_status, b.extras,
+                       s.name as service_name, s.base_price as service_price,
+                       pkg.name as package_name, pkg.price as package_price,
                        su.full_name as customer_name
                 FROM vehicle_wash b
                 LEFT JOIN `serveasy-services` s ON b.service_id = s.id
+                LEFT JOIN `serveasy-service_packages` pkg ON b.package_id = pkg.id
                 LEFT JOIN site_user su ON b.customer_id = su.id
                 LEFT JOIN reviews r ON r.booking_id = b.id
                 WHERE b.provider_id = ? AND LOWER(b.status) NOT IN ('completed', 'cancelled', 'rejected')
@@ -254,6 +296,10 @@ try {
             ");
             $recent_stmt->execute([$provider_id]);
             $recent_bookings = $recent_stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($recent_bookings as &$rb) {
+                $rb['provider_amount'] = calculateProviderAmount($rb);
+            }
+            unset($rb);
 
             header('Content-Type: application/json');
             echo json_encode([
@@ -326,7 +372,11 @@ try {
                     b.id DESC
             ");
             $stmt->execute([$provider_id]);
-            $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $orders = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($orders as &$ord) {
+                $ord['provider_amount'] = calculateProviderAmount($ord);
+            }
+            unset($ord);
 
             header('Content-Type: application/json');
             echo json_encode($orders);
@@ -954,6 +1004,7 @@ try {
             $booking = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($booking) {
+                $booking['provider_amount'] = calculateProviderAmount($booking);
                 $bLat = (float)($booking['latitude'] ?? 0);
                 $bLng = (float)($booking['longitude'] ?? 0);
                 if ($bLat == 0.0 && $bLng == 0.0 && !empty($booking['customer_id'])) {
