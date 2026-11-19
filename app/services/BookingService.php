@@ -114,6 +114,42 @@ class BookingService {
                 }
             }
 
+            // Atomic Address Persistence: Check and save new address in user_addresses if provided
+            if (!empty($data['customer_id'])) {
+                $addrToSave = !empty($data['raw_address']) ? trim($data['raw_address']) : trim($data['address'] ?? '');
+                $locType = $data['location_type'] ?? 'doorstep';
+                if (!empty($addrToSave) && $locType !== 'center' && stripos($addrToSave, 'Service Center:') !== 0) {
+                    $pincode = !empty($data['pincode']) ? trim($data['pincode']) : '';
+                    $landmark = !empty($data['landmark']) ? trim($data['landmark']) : '';
+                    $label = !empty($data['address_label']) ? trim($data['address_label']) : 'Home';
+                    $lat = !empty($data['latitude']) ? (float)$data['latitude'] : (!empty($data['lat']) ? (float)$data['lat'] : null);
+                    $lng = !empty($data['longitude']) ? (float)$data['longitude'] : (!empty($data['lng']) ? (float)$data['lng'] : null);
+
+                    try {
+                        $chkAddr = DB::getConnection()->prepare("
+                            SELECT id FROM `user_addresses` 
+                            WHERE user_id = ? 
+                              AND (LOWER(TRIM(address)) = LOWER(TRIM(?)) OR (pincode = ? AND pincode != '' AND LOWER(TRIM(address)) LIKE LOWER(CONCAT('%', TRIM(?), '%'))))
+                            LIMIT 1
+                        ");
+                        $chkAddr->execute([$data['customer_id'], $addrToSave, $pincode, $addrToSave]);
+                        if (!$chkAddr->fetch()) {
+                            $cntCheck = DB::getConnection()->prepare("SELECT COUNT(*) FROM `user_addresses` WHERE user_id = ?");
+                            $cntCheck->execute([$data['customer_id']]);
+                            $isFirst = ((int)$cntCheck->fetchColumn() === 0) ? 1 : 0;
+
+                            $insAddr = DB::getConnection()->prepare("
+                                INSERT INTO `user_addresses` (user_id, label, address, landmark, pincode, latitude, longitude, is_default, created_at, updated_at) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                            ");
+                            $insAddr->execute([$data['customer_id'], $label, $addrToSave, $landmark, $pincode, $lat, $lng, $isFirst]);
+                        }
+                    } catch (\Throwable $at) {
+                        error_log("Atomic address saving notice: " . $at->getMessage());
+                    }
+                }
+            }
+
             $bookingId = $this->bookingRepo->createBooking($data);
             $this->bookingRepo->addStatusHistory($bookingId, 'pending', 'Booking request initiated', $data['customer_id']);
             
@@ -258,8 +294,8 @@ class BookingService {
             }
             
             // Check status transition logic
-            if ($targetStatus === 'accepted' || $targetStatus === 'confirmed') {
-                if ($currentStatus !== 'pending') {
+            if ($targetStatus === 'accepted' || $targetStatus === 'confirmed' || ($targetStatus === 'in_progress' && $currentStatus === 'pending')) {
+                if ($targetStatus !== 'in_progress' && $currentStatus !== 'pending') {
                     throw new Exception("Only pending bookings can be accepted/confirmed");
                 }
 
@@ -291,19 +327,24 @@ class BookingService {
             if ($targetStatus === 'on_the_way' && !in_array($currentStatus, ['accepted', 'confirmed', 'assigned'])) {
                 throw new Exception("Booking must be confirmed or staff assigned to go on the way");
             }
-            if ($targetStatus === 'in_progress' && !in_array($currentStatus, ['accepted', 'confirmed', 'assigned', 'on_the_way'])) {
-                throw new Exception("Booking must be confirmed, assigned, or on the way to start");
+            if ($targetStatus === 'in_progress' && !in_array($currentStatus, ['pending', 'accepted', 'confirmed', 'assigned', 'on_the_way'])) {
+                throw new Exception("Booking must be pending, confirmed, assigned, or on the way to start");
             }
-            if ($targetStatus === 'completed' && $currentStatus !== 'in_progress') {
-                throw new Exception("Booking must be in progress to complete");
+            if ($targetStatus === 'completed' && !in_array($currentStatus, ['in_progress', 'on_the_way', 'accepted', 'confirmed'])) {
+                throw new Exception("Booking must be in progress, confirmed, or on the way to complete");
             }
             if ($targetStatus === 'cancelled' && in_array($currentStatus, ['completed', 'rejected', 'cancelled'])) {
                 throw new Exception("Cannot cancel a {$currentStatus} booking");
             }
 
+            // If jumping directly from pending to in_progress ("Accept & Start" 1-click), also record accepted history
+            if ($currentStatus === 'pending' && $targetStatus === 'in_progress') {
+                $this->bookingRepo->addStatusHistory($bookingId, 'accepted', 'Booking accepted via 1-Click Accept & Start', (int)$userId);
+            }
+
             // Update status
             $this->bookingRepo->updateStatus($bookingId, $status);
-            $this->bookingRepo->addStatusHistory($bookingId, $status, $remarks, (int)$userId);
+            $this->bookingRepo->addStatusHistory($bookingId, $status, $remarks ?: ($targetStatus === 'in_progress' ? 'Job started' : null), (int)$userId);
 
             if ($targetStatus === 'completed') {
                 // Settle payments & transfer money to provider
