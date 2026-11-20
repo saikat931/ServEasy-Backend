@@ -42,4 +42,8 @@ class Database
 }
 
 // Create PDO instance
-$pdo = Database::connect();
+try {
+    $pdo = Database::connect();
+} catch (\Throwable $e) {
+    $pdo = null;
+}
