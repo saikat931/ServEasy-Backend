@@ -72,14 +72,19 @@ class MailHelper {
             $mail->Username   = $username;
             $mail->Password   = $password;
             $mail->CharSet    = 'UTF-8';
-            $mail->Timeout    = 10;
+            $mail->Timeout    = 5;
             $mail->XMailer    = ' ';
 
-            // Prevent local Windows computer hostname (e.g. HACKER) from leaking into Message-ID or HELO
-            $msgDomain = (stripos($host, 'gmail') !== false) ? 'mail.gmail.com' : (stripos($host, 'brevo') !== false ? 'smtp-relay.brevo.com' : 'com');
+            // Prevent local computer hostname from leaking into Message-ID or HELO
+            $msgDomain = (stripos($host, 'gmail') !== false) ? 'mail.gmail.com' : (stripos($host, 'brevo') !== false ? 'smtp-relay.brevo.com' : 'serveasy.app');
             $randomId  = bin2hex(random_bytes(16));
             $mail->MessageID = "<{$randomId}@{$msgDomain}>";
-            $mail->Helo = $host;
+            $mail->Helo = 'serveasy.app';
+
+            // High priority transactional email headers for faster inbox routing
+            $mail->addCustomHeader('X-Priority', '1');
+            $mail->addCustomHeader('Importance', 'High');
+            $mail->addCustomHeader('Auto-Submitted', 'auto-generated');
 
             if ($port === 465) {
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;

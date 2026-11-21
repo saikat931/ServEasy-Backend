@@ -69,8 +69,7 @@ if ($action == "register") {
     if ($q) {
         echo json_encode([
             "status" => "success",
-            "message" => "Registration successful! OTP sent.",
-            "otp" => $otp
+            "message" => "Registration successful! OTP sent."
         ]);
     } else {
         echo json_encode(["status" => "error", "message" => "Registration failed"]);
@@ -177,24 +176,7 @@ if ($action == "send_otp") {
     $lockoutSql = ($newCount >= 4) ? "'" . date('Y-m-d H:i:s', $now + 1800) . "'" : "NULL";
     $otp = (string)rand(100000, 999999);
 
-    // --- DISPATCH EMAIL VIA FREE GMAIL SMTP / PHPMAILER ---
-    $mailResult = null;
-    if ($isInputEmail) {
-        require_once __DIR__ . '/../app/helpers/MailHelper.php';
-        $recipientName = $userRow['full_name'] ?? 'User';
-        $mailResult = \App\Helpers\MailHelper::sendOtp($identity, $otp, $recipientName, 'customer');
-
-        // If SMTP is configured and failed to send
-        if (!$mailResult['success'] && empty($mailResult['unconfigured'])) {
-            echo json_encode([
-                "status" => "error",
-                "message" => $mailResult['message'] ?? "Failed to deliver OTP email. Please try again."
-            ]);
-            exit;
-        }
-    }
-
-    // Update or Insert into site_user
+    // 1. Update or Insert into site_user FIRST so DB has the valid OTP immediately
     if (!$userRow) {
         $emailVal = ($column === "email_address") ? "'$safeIdentity'" : "NULL";
         $phoneVal = ($column === "phone_number") ? "'$safeIdentity'" : "NULL";
@@ -214,25 +196,41 @@ if ($action == "send_otp") {
         );
     }
 
-    // Response Handling
-    if ($mailResult && !empty($mailResult['unconfigured'])) {
-        // Dev fallback if SMTP credentials not filled in .env
-        echo json_encode([
-            "status" => "success",
-            "message" => "OTP generated. (SMTP credentials not yet set in backend/.env; use debug code)",
-            "otp" => $otp,
-            "attempt" => $newCount,
-            "max_attempts" => 4
-        ]);
-        exit;
-    }
-
-    echo json_encode([
+    // 2. Prepare JSON response
+    $respPayload = [
         "status" => "success",
         "message" => "Verification code sent successfully to " . ($isInputEmail ? "your email." : "your phone.") . " (Attempt {$newCount} of 4)",
         "attempt" => $newCount,
         "max_attempts" => 4
-    ]);
+    ];
+    $jsonOutput = json_encode($respPayload);
+
+    // 3. Fast Non-Blocking Flush: Closes connection & returns to phone in ~10ms
+    if (function_exists('fastcgi_finish_request')) {
+        echo $jsonOutput;
+        session_write_close();
+        fastcgi_finish_request();
+    } elseif (!headers_sent()) {
+        ignore_user_abort(true);
+        header("Content-Type: application/json");
+        header("Connection: close");
+        header("Content-Length: " . strlen($jsonOutput));
+        echo $jsonOutput;
+        if (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+        flush();
+        session_write_close();
+    } else {
+        echo $jsonOutput;
+    }
+
+    // 4. Background Email Dispatch: runs asynchronously on server without making phone app wait!
+    if ($isInputEmail) {
+        require_once __DIR__ . '/../app/helpers/MailHelper.php';
+        $recipientName = $userRow['full_name'] ?? 'User';
+        \App\Helpers\MailHelper::sendOtp($identity, $otp, $recipientName, 'customer');
+    }
     exit;
 }
 
