@@ -187,41 +187,28 @@ if ($action == "send_otp") {
         ");
     }
 
-    // 2. Prepare JSON response
-    $respData = [
+    // 2. Dispatch Email via PHPMailer / Gmail SMTP
+    if ($isInputEmail) {
+        require_once __DIR__ . '/../app/helpers/MailHelper.php';
+        $recipientName = $providerRow['full_name'] ?? 'Provider';
+        $mailResult = \App\Helpers\MailHelper::sendOtp($identity, $otp, $recipientName, 'provider');
+
+        if (!$mailResult['success'] && empty($mailResult['unconfigured'])) {
+            echo json_encode([
+                "status" => "error",
+                "message" => $mailResult['message'] ?? "Failed to deliver OTP email. Please try again."
+            ]);
+            exit;
+        }
+    }
+
+    // 3. Return JSON response
+    echo json_encode([
         "status" => "success",
         "message" => "Verification code sent successfully to " . ($isInputEmail ? "your email." : "your phone.") . " (Attempt {$newCount} of 4)",
         "attempt" => $newCount,
         "max_attempts" => 4
-    ];
-    $jsonOutput = json_encode($respData);
-
-    // 3. Fast Non-Blocking Flush: Closes connection & returns to phone in ~10ms
-    if (function_exists('fastcgi_finish_request')) {
-        echo $jsonOutput;
-        session_write_close();
-        fastcgi_finish_request();
-    } elseif (!headers_sent()) {
-        ignore_user_abort(true);
-        header("Content-Type: application/json");
-        header("Connection: close");
-        header("Content-Length: " . strlen($jsonOutput));
-        echo $jsonOutput;
-        if (ob_get_level() > 0) {
-            ob_end_flush();
-        }
-        flush();
-        session_write_close();
-    } else {
-        echo $jsonOutput;
-    }
-
-    // 4. Background Email Dispatch: runs asynchronously on server without making phone app wait!
-    if ($isInputEmail) {
-        require_once __DIR__ . '/../app/helpers/MailHelper.php';
-        $recipientName = $providerRow['full_name'] ?? 'Provider';
-        \App\Helpers\MailHelper::sendOtp($identity, $otp, $recipientName, 'provider');
-    }
+    ]);
     exit;
 }
 
